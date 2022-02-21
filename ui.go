@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	human "gx/ipfs/QmPSBJL4momYnE7DcUyk2DVhD6rH488ZmHBGLbxNdhU44K/go-humanize"
-	ma "gx/ipfs/QmWWQ2Txc2c6tqjsBpzg5Ar652cHPGNsQQp2SejkNmkUMb/go-multiaddr"
-	net "gx/ipfs/QmXfkENeeBvh3zYA51MaSdGUdBjhQ99cP5WQe8zgr6wchG/go-libp2p-net"
+	human "github.com/dustin/go-humanize"
+	net "github.com/libp2p/go-libp2p-core/network"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 const (

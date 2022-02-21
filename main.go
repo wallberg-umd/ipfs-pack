@@ -12,27 +12,29 @@ import (
 	"strings"
 	"time"
 
-	cli "gx/ipfs/QmVahSzvB3Upf5dAW15dpktF6PXb4z9V5LohmbcUqktyF4/cli"
+	cli "github.com/urfave/cli"
 
-	chunk "gx/ipfs/QmWo8jYc19ppG7YoTsrr2kEtLRbARTJho5oNXFTR6B7Peq/go-ipfs-chunker"
-	core "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/core"
-	cu "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/core/coreunix"
-	bitswap "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/exchange/bitswap"
-	filestore "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/filestore"
-	balanced "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/importer/balanced"
-	h "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/importer/helpers"
-	dag "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/merkledag"
-	fsrepo "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/repo/fsrepo"
-	ft "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/unixfs"
-	cid "gx/ipfs/QmcZfnkapfECQGcLZaf9B79NRg7cRa9EnZh4LSbkCzwNvY/go-cid"
-	files "gx/ipfs/QmceUdzxkimdYsgtX733uNgzf1DLHyBKN6ehGSp85ayppM/go-ipfs-cmdkit/files"
-	ipld "gx/ipfs/Qme5bWv7wtjUNGsK2BNGVUFPKiuxWrsqrtvYwCLRw8YFES/go-ipld-format"
+	files "github.com/ipfs/go-ipfs-files"
+	ipld "github.com/ipfs/go-ipld-format"
 
-	human "gx/ipfs/QmPSBJL4momYnE7DcUyk2DVhD6rH488ZmHBGLbxNdhU44K/go-humanize"
-	ds "gx/ipfs/QmPpegoMqhAEqjncrzArm7KVWAkCm78rqL2DPuNjhPrshg/go-datastore"
-	node "gx/ipfs/Qme5bWv7wtjUNGsK2BNGVUFPKiuxWrsqrtvYwCLRw8YFES/go-ipld-format"
+	bitswap "github.com/ipfs/go-bitswap"
+	cid "github.com/ipfs/go-cid"
+	filestore "github.com/ipfs/go-filestore"
+	cu "github.com/ipfs/go-ipfs/core/coreunix"
+	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
+	dag "github.com/ipfs/go-merkledag"
+	ft "github.com/ipfs/go-unixfs"
+	balanced "github.com/ipfs/go-unixfs/importer/balanced"
+	h "github.com/ipfs/go-unixfs/importer/helpers"
 
-	pb "gx/ipfs/QmeWjRodbcZFKe5tMN7poEx3izym6osrLSnTLf9UjJZBbs/pb"
+	core "github.com/ipfs/go-ipfs"
+	chunk "github.com/ipfs/go-ipfs-chunker"
+
+	human "github.com/dustin/go-humanize"
+	ds "github.com/ipfs/go-datastore"
+	node "github.com/ipfs/go-ipld-format"
+
+	pb "github.com/cheggaaa/pb"
 )
 
 const PackVersion = "v0.6.0"
@@ -199,14 +201,13 @@ var makePackCommand = cli.Command{
 			}
 		}()
 
-		sf, err := getFilteredDirFile(workdir)
+		sf, err := getFilteredDirectory(workdir)
 		if err != nil {
 			return err
 		}
 
 		go func() {
-			sizer := sf.(files.SizeFile)
-			size, err := sizer.Size()
+			size, err := sf.Size()
 			if err != nil {
 				fmt.Println("warning: could not compute size:", err)
 				return
@@ -215,12 +216,7 @@ var makePackCommand = cli.Command{
 			bar.ShowPercent = true
 		}()
 
-		err = adder.AddFile(sf)
-		if err != nil {
-			return err
-		}
-
-		_, err = adder.Finalize()
+		_, err = adder.AddAllAndPin(context.Background(), sf)
 		if err != nil {
 			return err
 		}

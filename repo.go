@@ -8,17 +8,16 @@ import (
 	"path/filepath"
 	"strings"
 
-	cli "gx/ipfs/QmVahSzvB3Upf5dAW15dpktF6PXb4z9V5LohmbcUqktyF4/cli"
-
-	blockstore "gx/ipfs/QmTVDM4LCSUMFNQzbDLL9zQwp8usE6QHymFdh3h8vL9v6b/go-ipfs-blockstore"
-	h "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/importer/helpers"
-	mfs "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/mfs"
-	pin "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/pin"
-	gc "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/pin/gc"
-	fsrepo "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/repo/fsrepo"
-	ft "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/unixfs"
-
-	cid "gx/ipfs/QmcZfnkapfECQGcLZaf9B79NRg7cRa9EnZh4LSbkCzwNvY/go-cid"
+	cid "github.com/ipfs/go-cid"
+	blockstore "github.com/ipfs/go-ipfs-blockstore"
+	ipfspinner "github.com/ipfs/go-ipfs-pinner"
+	pinner "github.com/ipfs/go-ipfs-pinner/dspinner"
+	"github.com/ipfs/go-ipfs/gc"
+	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
+	mfs "github.com/ipfs/go-mfs"
+	ft "github.com/ipfs/go-unixfs"
+	h "github.com/ipfs/go-unixfs/importer/helpers"
+	cli "github.com/urfave/cli"
 )
 
 var repoCommand = cli.Command{
@@ -118,7 +117,7 @@ var repoRegenCommand = cli.Command{
 			}
 		}
 
-		nd, err := root.GetValue().GetNode()
+		nd, err := root.GetDirectory().GetNode()
 		if err != nil {
 			return err
 		}
@@ -156,21 +155,27 @@ var repoGcCommand = cli.Command{
 			return err
 		}
 
+		ctx := context.Background()
 		bstore, ds := buildDagserv(fsr.Datastore(), fsr.FileManager())
 		gcbs := blockstore.NewGCBlockstore(bstore, blockstore.NewGCLocker())
-		pinner := pin.NewPinner(fsr.Datastore(), ds, ds)
+
+		// TODO
+		pinner, err := pinner.New(ctx, fsr.Datastore(), ds)
+		if err != nil {
+			return err
+		}
 
 		root, err := getManifestRoot(cwd)
 		if err != nil {
 			return err
 		}
 
-		pinner.PinWithMode(root, pin.Recursive)
-		if err := pinner.Flush(); err != nil {
+		pinner.PinWithMode(*root, ipfspinner.Recursive)
+		if err := pinner.Flush(ctx); err != nil {
 			return err
 		}
 
-		out := gc.GC(context.Background(), gcbs, fsr.Datastore(), pinner, nil)
+		out := gc.GC(ctx, gcbs, fsr.Datastore(), pinner, nil)
 		if err != nil {
 			return err
 		}
@@ -243,5 +248,6 @@ func getManifestRoot(workdir string) (*cid.Cid, error) {
 	}
 
 	hash := strings.SplitN(lastline, "\t", 2)[0]
-	return cid.Decode(hash)
+	cid, err := cid.Decode(hash)
+	return &cid, err
 }
