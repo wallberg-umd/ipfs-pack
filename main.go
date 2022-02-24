@@ -12,27 +12,28 @@ import (
 	"strings"
 	"time"
 
-	cli "github.com/urfave/cli"
-
 	files "github.com/ipfs/go-ipfs-files"
 	ipld "github.com/ipfs/go-ipld-format"
+	cli "github.com/urfave/cli"
 
 	bitswap "github.com/ipfs/go-bitswap"
-	cid "github.com/ipfs/go-cid"
 	filestore "github.com/ipfs/go-filestore"
-	cu "github.com/ipfs/go-ipfs/core/coreunix"
+	"github.com/ipfs/go-ipfs/core/coreapi"
+	"github.com/ipfs/go-ipfs/core/node/libp2p"
 	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
 	dag "github.com/ipfs/go-merkledag"
 	ft "github.com/ipfs/go-unixfs"
 	balanced "github.com/ipfs/go-unixfs/importer/balanced"
 	h "github.com/ipfs/go-unixfs/importer/helpers"
 
-	core "github.com/ipfs/go-ipfs"
 	chunk "github.com/ipfs/go-ipfs-chunker"
+	core "github.com/ipfs/go-ipfs/core"
 
 	human "github.com/dustin/go-humanize"
 	ds "github.com/ipfs/go-datastore"
 	node "github.com/ipfs/go-ipld-format"
+
+	coreiface "github.com/ipfs/interface-go-ipfs-core"
 
 	pb "github.com/cheggaaa/pb"
 )
@@ -180,7 +181,7 @@ var makePackCommand = cli.Command{
 			var sizetotal int64
 			var sizethis int64
 			for v := range output {
-				ao := v.(*cu.AddedObject)
+				ao := v.(*coreiface.AddEvent)
 				if ao.Bytes == 0 {
 					sizetotal += sizethis
 					sizethis = 0
@@ -188,16 +189,13 @@ var makePackCommand = cli.Command{
 					sizethis = ao.Bytes
 					bar.Set64(sizetotal + sizethis)
 				}
-				if ao.Hash == "" {
-					continue
-				}
 				towrite := ao.Name[len(dirname):]
 				if len(towrite) > 0 {
 					towrite = towrite[1:]
 				} else {
 					towrite = "."
 				}
-				fmt.Fprintf(manifest, "%s\t%s\t%s\n", ao.Hash, imp, escape(towrite))
+				fmt.Fprintf(manifest, "%s\t%s\n", imp, escape(towrite))
 			}
 		}()
 
@@ -240,41 +238,43 @@ var makePackCommand = cli.Command{
 func clearBar(bar *pb.ProgressBar, mes string) {
 	fmt.Printf("\r%s%s\n", mes, strings.Repeat(" ", bar.GetWidth()-len(mes)))
 }
-func getPackRoot(nd *core.IpfsNode, workdir string) (node.Node, error) {
+func getPackRoot(ipfs coreiface.CoreAPI, workdir string) (node.Node, error) {
 	ctx := context.Background()
 	root, err := getManifestRoot(workdir)
 	if err != nil {
 		return nil, err
 	}
 
-	proot, err := nd.DAG.Get(ctx, root)
+	proot, err := ipfs.Dag().Get(ctx, *root)
 	if err != nil {
 		return nil, err
 	}
 
-	pfi, err := os.Open(filepath.Join(workdir, ManifestFilename))
+	manifestPath := filepath.Join(workdir, ManifestFilename)
+	st, err := os.Stat(manifestPath)
 	if err != nil {
 		return nil, err
 	}
 
-	manifhash, err := cu.Add(nd, pfi)
+	pfi, err := files.NewSerialFile(manifestPath, false, st)
 	if err != nil {
 		return nil, err
 	}
 
-	manifcid, err := cid.Decode(manifhash)
+	manifpath, err := ipfs.Unixfs().Add(ctx, pfi)
+	// manifhash, err := cu.Add(nd, pfi)
 	if err != nil {
 		return nil, err
 	}
 
-	manifnode, err := nd.DAG.Get(context.Background(), manifcid)
+	manifnode, err := ipfs.Dag().Get(ctx, manifpath.Root())
 	if err != nil {
 		return nil, err
 	}
 
 	prootpb := proot.(*dag.ProtoNode)
-	prootpb.AddNodeLinkClean(ManifestFilename, manifnode.(*dag.ProtoNode))
-	if err := nd.DAG.Add(ctx, prootpb); err != nil {
+	prootpb.AddNodeLink(ManifestFilename, manifnode.(*dag.ProtoNode))
+	if err := ipfs.Dag().Add(ctx, prootpb); err != nil {
 		return nil, err
 	}
 	return prootpb, nil
@@ -347,7 +347,7 @@ var servePackCommand = cli.Command{
 		cfg := &core.BuildCfg{
 			Online:  true,
 			Repo:    r,
-			Routing: core.DHTClientOption,
+			Routing: libp2p.DHTClientOption,
 		}
 
 		nd, err := core.NewNode(context.Background(), cfg)
@@ -355,7 +355,12 @@ var servePackCommand = cli.Command{
 			return err
 		}
 
-		proot, err := getPackRoot(nd, workdir)
+		ipfs, err := coreapi.NewCoreAPI(nd)
+		if err != nil {
+			return err
+		}
+
+		proot, err := getPackRoot(ipfs, workdir)
 		if err != nil {
 			return err
 		}
@@ -612,13 +617,16 @@ func addItem(path string, st os.FileInfo, params *h.DagBuilderParams) (node.Node
 	}
 	defer fi.Close()
 
-	rf, err := files.NewReaderPathFile(filepath.Base(path), path, fi, st)
+	rf, err := files.NewReaderPathFile(path, fi, st)
 	if err != nil {
 		return nil, err
 	}
 
 	spl := chunk.NewSizeSplitter(rf, chunk.DefaultBlockSize)
-	dbh := params.New(spl)
+	dbh, err := params.New(spl)
+	if err != nil {
+		return nil, err
+	}
 
 	nd, err := balanced.Layout(dbh)
 	if err != nil {

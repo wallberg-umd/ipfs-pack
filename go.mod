@@ -16,10 +16,12 @@ require (
 	github.com/ipfs/go-ipfs-config v0.18.0
 	github.com/ipfs/go-ipfs-exchange-offline v0.1.1
 	github.com/ipfs/go-ipfs-files v0.0.9
+	github.com/ipfs/go-ipfs-pinner v0.2.1
 	github.com/ipfs/go-ipld-format v0.2.0
 	github.com/ipfs/go-merkledag v0.5.1
 	github.com/ipfs/go-mfs v0.2.1
 	github.com/ipfs/go-unixfs v0.3.1
+	github.com/ipfs/interface-go-ipfs-core v0.5.2
 	github.com/libp2p/go-libp2p-core v0.11.0
 	github.com/multiformats/go-multiaddr v0.4.1
 	github.com/multiformats/go-multihash v0.1.0
@@ -68,7 +70,6 @@ require (
 	github.com/ipfs/go-ipfs-ds-help v1.1.0 // indirect
 	github.com/ipfs/go-ipfs-exchange-interface v0.1.0 // indirect
 	github.com/ipfs/go-ipfs-keystore v0.0.2 // indirect
-	github.com/ipfs/go-ipfs-pinner v0.2.1 // indirect
 	github.com/ipfs/go-ipfs-posinfo v0.0.1 // indirect
 	github.com/ipfs/go-ipfs-pq v0.0.2 // indirect
 	github.com/ipfs/go-ipfs-provider v0.7.1 // indirect
@@ -85,7 +86,6 @@ require (
 	github.com/ipfs/go-peertaskqueue v0.7.0 // indirect
 	github.com/ipfs/go-unixfsnode v1.1.3 // indirect
 	github.com/ipfs/go-verifcid v0.0.1 // indirect
-	github.com/ipfs/interface-go-ipfs-core v0.5.2 // indirect
 	github.com/ipld/go-codec-dagpb v1.3.0 // indirect
 	github.com/ipld/go-ipld-prime v0.14.2 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
