@@ -38,7 +38,7 @@ import (
 	pb "github.com/cheggaaa/pb"
 )
 
-const PackVersion = "v0.6.0"
+const PackVersion = "v0.7.0"
 
 var (
 	cwd string
