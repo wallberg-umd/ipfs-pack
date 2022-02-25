@@ -14,6 +14,7 @@ import (
 	config "github.com/ipfs/go-ipfs-config"
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
 	files "github.com/ipfs/go-ipfs-files"
+	pin "github.com/ipfs/go-ipfs-pinner"
 	cu "github.com/ipfs/go-ipfs/core/coreunix"
 	"github.com/ipfs/go-ipfs/plugin/loader"
 	repo "github.com/ipfs/go-ipfs/repo"
@@ -94,11 +95,11 @@ func buildDagserv(dstore ds.Batching, fm *filestore.FileManager) (blockstore.Blo
 	return bs, dag.NewDAGService(bserv)
 }
 
-func getAdder(dstore ds.Batching, fm *filestore.FileManager) (*cu.Adder, error) {
+func getAdder(dstore ds.Batching, pinner pin.Pinner, fm *filestore.FileManager) (*cu.Adder, error) {
 	bstore, dserv := buildDagserv(dstore, fm)
 
 	gcbs := blockstore.NewGCBlockstore(bstore, blockstore.NewGCLocker())
-	adder, err := cu.NewAdder(context.Background(), nil, gcbs, dserv)
+	adder, err := cu.NewAdder(context.Background(), pinner, gcbs, dserv)
 	if err != nil {
 		return nil, err
 	}

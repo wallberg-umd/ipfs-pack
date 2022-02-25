@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -148,11 +149,26 @@ var makePackCommand = cli.Command{
 			return err
 		}
 
-		adder, err := getAdder(repo.Datastore(), repo.FileManager())
+		cfg := &core.BuildCfg{
+			Online: false,
+			Repo:   repo,
+			// Routing: libp2p.DHTClientOption,
+		}
+
+		nd, err := core.NewNode(context.Background(), cfg)
 		if err != nil {
 			return err
 		}
-		dirname := filepath.Base(workdir)
+
+		// ipfs, err := coreapi.NewCoreAPI(nd)
+		// if err != nil {
+		// 	return err
+		// }
+
+		adder, err := getAdder(repo.Datastore(), nd.Pinning, repo.FileManager())
+		if err != nil {
+			return err
+		}
 
 		output := make(chan interface{})
 		adder.Out = output
@@ -234,7 +250,7 @@ var makePackCommand = cli.Command{
 }
 
 func clearBar(bar *pb.ProgressBar, mes string) {
-	fmt.Printf("\r%s%s\n", mes, strings.Repeat(" ", bar.GetWidth()-len(mes)))
+	fmt.Printf("\r%s%s\n", mes, strings.Repeat(" ", int(math.Max(float64(bar.GetWidth()-len(mes)), 0))))
 }
 func getPackRoot(ipfs coreiface.CoreAPI, workdir string) (node.Node, error) {
 	ctx := context.Background()
