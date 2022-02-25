@@ -189,12 +189,10 @@ var makePackCommand = cli.Command{
 					sizethis = ao.Bytes
 					bar.Set64(sizetotal + sizethis)
 				}
-				towrite := ao.Name[len(dirname):]
-				if len(towrite) > 0 {
-					towrite = towrite[1:]
-				} else {
-					towrite = "."
-				}
+				towrite := ao.Name
+				// if len(towrite) == 0 {
+				// 	towrite = "."
+				// }
 				fmt.Fprintf(manifest, "%s\t%s\n", imp, escape(towrite))
 			}
 		}()
@@ -305,7 +303,7 @@ var servePackCommand = cli.Command{
 
 		packpath := filepath.Join(workdir, PackRepo)
 		if !fsrepo.IsInitialized(packpath) {
-			return fmt.Errorf("No ipfs-pack found in '%s'\nplease run 'ipfs-pack make' before 'ipfs-pack serve'", cwd)
+			return fmt.Errorf("no ipfs-pack found in '%s'\nplease run 'ipfs-pack make' before 'ipfs-pack serve'", cwd)
 		}
 
 		r, err := getRepo(workdir)

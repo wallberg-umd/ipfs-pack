@@ -15,6 +15,7 @@ import (
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
 	files "github.com/ipfs/go-ipfs-files"
 	cu "github.com/ipfs/go-ipfs/core/coreunix"
+	"github.com/ipfs/go-ipfs/plugin/loader"
 	repo "github.com/ipfs/go-ipfs/repo"
 	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
 	ipld "github.com/ipfs/go-ipld-format"
@@ -36,10 +37,35 @@ func openManifestFile(workdir string) (*os.File, error) {
 	return fi, nil
 }
 
+func setupPlugins(externalPluginsPath string) error {
+	// Load any external plugins if available on externalPluginsPath
+	plugins, err := loader.NewPluginLoader(filepath.Join(externalPluginsPath, "plugins"))
+	if err != nil {
+		return fmt.Errorf("error loading plugins: %s", err)
+	}
+
+	// Load preloaded and external plugins
+	if err := plugins.Initialize(); err != nil {
+		return fmt.Errorf("error initializing plugins: %s", err)
+	}
+
+	if err := plugins.Inject(); err != nil {
+		return fmt.Errorf("error initializing plugins: %s", err)
+	}
+
+	return nil
+}
+
 func getRepo(workdir string) (repo.Repo, error) {
 	packpath := filepath.Join(workdir, ".ipfs-pack")
+
+	if err := setupPlugins(packpath); err != nil {
+		return nil, err
+
+	}
+
 	if !fsrepo.IsInitialized(packpath) {
-		cfg, err := config.Init(ioutil.Discard, 1024)
+		cfg, err := config.Init(ioutil.Discard, 2048)
 		if err != nil {
 			return nil, err
 		}
@@ -86,7 +112,6 @@ func getFilteredDirectory(workdir string) (files.Directory, error) {
 	if err != nil {
 		return nil, err
 	}
-	dirname := filepath.Base(workdir)
 
 	var farr []files.DirEntry
 	for _, ent := range contents {
@@ -96,7 +121,7 @@ func getFilteredDirectory(workdir string) (files.Directory, error) {
 		if strings.HasPrefix(ent.Name(), ".") {
 			continue
 		}
-		f, err := files.NewSerialFile(filepath.Join(dirname, ent.Name()), false, ent)
+		f, err := files.NewSerialFile(filepath.Join(workdir, ent.Name()), false, ent)
 		if err != nil {
 			return nil, err
 		}
