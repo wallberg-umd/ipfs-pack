@@ -205,11 +205,15 @@ var makePackCommand = cli.Command{
 					sizethis = ao.Bytes
 					bar.Set64(sizetotal + sizethis)
 				}
+				if ao.Path == nil {
+					continue
+				}
 				towrite := ao.Name
-				// if len(towrite) == 0 {
-				// 	towrite = "."
-				// }
-				fmt.Fprintf(manifest, "%s\t%s\n", imp, escape(towrite))
+				cid := ao.Path.Cid()
+				if len(towrite) == 0 {
+					towrite = "."
+				}
+				fmt.Fprintf(manifest, "%s\t%s\t%s\n", cid, imp, escape(towrite))
 			}
 		}()
 
