@@ -85,11 +85,11 @@ var repoRegenCommand = cli.Command{
 			st, err := os.Lstat(path)
 			switch {
 			case os.IsNotExist(err):
-				return fmt.Errorf("error: in manifest, missing from pack: %s\n", path)
-			default:
-				return fmt.Errorf("error: reading file %s: %s\n", path, err)
+				return fmt.Errorf("error: in manifest, missing from pack: %s", path)
 			case err == nil:
 				// continue
+			default:
+				return fmt.Errorf("error: reading file %s: %s", path, err)
 			}
 
 			if st.IsDir() {
@@ -145,12 +145,20 @@ var repoGcCommand = cli.Command{
 	Name:  "gc",
 	Usage: "garbage collect the pack's ipfs repo",
 	Action: func(c *cli.Context) error {
-		packpath := filepath.Join(cwd, PackRepo)
+		workdir := cwd
+		if c.Args().Present() {
+			argpath, err := filepath.Abs(c.Args().First())
+			if err != nil {
+				return err
+			}
+			workdir = argpath
+		}
+		packpath := filepath.Join(workdir, ".ipfs-pack")
 		if !fsrepo.IsInitialized(packpath) {
-			return fmt.Errorf("no repo found at ./.ipfs-pack")
+			return fmt.Errorf("no repo found at %s", packpath)
 		}
 
-		fsr, err := fsrepo.Open(packpath)
+		fsr, err := getRepo(workdir)
 		if err != nil {
 			return err
 		}
@@ -196,12 +204,20 @@ var repoLsCommand = cli.Command{
 	Name:  "ls",
 	Usage: "list all cids in the pack's ipfs repo",
 	Action: func(c *cli.Context) error {
-		packpath := filepath.Join(cwd, PackRepo)
+		workdir := cwd
+		if c.Args().Present() {
+			argpath, err := filepath.Abs(c.Args().First())
+			if err != nil {
+				return err
+			}
+			workdir = argpath
+		}
+		packpath := filepath.Join(workdir, PackRepo)
 		if !fsrepo.IsInitialized(packpath) {
-			return fmt.Errorf("no repo found at ./.ipfs-pack")
+			return fmt.Errorf("no repo found at %s", packpath)
 		}
 
-		fsr, err := fsrepo.Open(packpath)
+		fsr, err := getRepo(workdir)
 		if err != nil {
 			return err
 		}

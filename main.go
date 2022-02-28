@@ -208,8 +208,8 @@ var makePackCommand = cli.Command{
 				if ao.Path == nil {
 					continue
 				}
-				towrite := ao.Name
 				cid := ao.Path.Cid()
+				towrite := ao.Name
 				if len(towrite) == 0 {
 					towrite = "."
 				}
