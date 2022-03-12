@@ -8,19 +8,21 @@ import (
 	"path/filepath"
 	"strings"
 
-	blockstore "gx/ipfs/QmTVDM4LCSUMFNQzbDLL9zQwp8usE6QHymFdh3h8vL9v6b/go-ipfs-blockstore"
-	blockservice "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/blockservice"
-	cu "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/core/coreunix"
-	offline "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/exchange/offline"
-	filestore "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/filestore"
-	dag "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/merkledag"
-	repo "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/repo"
-	config "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/repo/config"
-	fsrepo "gx/ipfs/QmatUACvrFK3xYg1nd2iLAKfz7Yy5YB56tnzBYHpqiUuhn/go-ipfs/repo/fsrepo"
-	files "gx/ipfs/QmceUdzxkimdYsgtX733uNgzf1DLHyBKN6ehGSp85ayppM/go-ipfs-cmdkit/files"
-	ipld "gx/ipfs/Qme5bWv7wtjUNGsK2BNGVUFPKiuxWrsqrtvYwCLRw8YFES/go-ipld-format"
+	blockservice "github.com/ipfs/go-blockservice"
+	filestore "github.com/ipfs/go-filestore"
+	blockstore "github.com/ipfs/go-ipfs-blockstore"
+	config "github.com/ipfs/go-ipfs-config"
+	offline "github.com/ipfs/go-ipfs-exchange-offline"
+	files "github.com/ipfs/go-ipfs-files"
+	pin "github.com/ipfs/go-ipfs-pinner"
+	cu "github.com/ipfs/go-ipfs/core/coreunix"
+	"github.com/ipfs/go-ipfs/plugin/loader"
+	repo "github.com/ipfs/go-ipfs/repo"
+	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
+	ipld "github.com/ipfs/go-ipld-format"
+	dag "github.com/ipfs/go-merkledag"
 
-	ds "gx/ipfs/QmPpegoMqhAEqjncrzArm7KVWAkCm78rqL2DPuNjhPrshg/go-datastore"
+	ds "github.com/ipfs/go-datastore"
 )
 
 func openManifestFile(workdir string) (*os.File, error) {
@@ -36,16 +38,41 @@ func openManifestFile(workdir string) (*os.File, error) {
 	return fi, nil
 }
 
+func setupPlugins(externalPluginsPath string) error {
+	// Load any external plugins if available on externalPluginsPath
+	plugins, err := loader.NewPluginLoader(filepath.Join(externalPluginsPath, "plugins"))
+	if err != nil {
+		return fmt.Errorf("error loading plugins: %s", err)
+	}
+
+	// Load preloaded and external plugins
+	if err := plugins.Initialize(); err != nil {
+		return fmt.Errorf("error initializing plugins: %s", err)
+	}
+
+	if err := plugins.Inject(); err != nil {
+		return fmt.Errorf("error initializing plugins: %s", err)
+	}
+
+	return nil
+}
+
 func getRepo(workdir string) (repo.Repo, error) {
 	packpath := filepath.Join(workdir, ".ipfs-pack")
+
+	if err := setupPlugins(packpath); err != nil {
+		return nil, err
+
+	}
+
 	if !fsrepo.IsInitialized(packpath) {
-		cfg, err := config.Init(ioutil.Discard, 1024)
+		cfg, err := config.Init(ioutil.Discard, 2048)
 		if err != nil {
 			return nil, err
 		}
 
-		cfg.Addresses.API = ""
-		cfg.Addresses.Gateway = "/ip4/127.0.0.1/tcp/0"
+		cfg.Addresses.API = config.Strings{""}
+		cfg.Addresses.Gateway = config.Strings{"/ip4/127.0.0.1/tcp/0"}
 		cfg.Addresses.Swarm = []string{"/ip4/0.0.0.0/tcp/0"}
 		cfg.Datastore.NoSync = true
 		cfg.Experimental.FilestoreEnabled = true
@@ -68,11 +95,11 @@ func buildDagserv(dstore ds.Batching, fm *filestore.FileManager) (blockstore.Blo
 	return bs, dag.NewDAGService(bserv)
 }
 
-func getAdder(dstore ds.Batching, fm *filestore.FileManager) (*cu.Adder, error) {
+func getAdder(dstore ds.Batching, pinner pin.Pinner, fm *filestore.FileManager) (*cu.Adder, error) {
 	bstore, dserv := buildDagserv(dstore, fm)
 
 	gcbs := blockstore.NewGCBlockstore(bstore, blockstore.NewGCLocker())
-	adder, err := cu.NewAdder(context.Background(), nil, gcbs, dserv)
+	adder, err := cu.NewAdder(context.Background(), pinner, gcbs, dserv)
 	if err != nil {
 		return nil, err
 	}
@@ -81,14 +108,13 @@ func getAdder(dstore ds.Batching, fm *filestore.FileManager) (*cu.Adder, error) 
 	return adder, nil
 }
 
-func getFilteredDirFile(workdir string) (files.File, error) {
+func getFilteredDirectory(workdir string) (files.Directory, error) {
 	contents, err := ioutil.ReadDir(workdir)
 	if err != nil {
 		return nil, err
 	}
-	dirname := filepath.Base(workdir)
 
-	var farr []files.File
+	var farr []files.DirEntry
 	for _, ent := range contents {
 		if ent.Name() == ManifestFilename || ent.Name() == ManifestFilename+".tmp" {
 			continue
@@ -96,12 +122,12 @@ func getFilteredDirFile(workdir string) (files.File, error) {
 		if strings.HasPrefix(ent.Name(), ".") {
 			continue
 		}
-		f, err := files.NewSerialFile(filepath.Join(dirname, ent.Name()), filepath.Join(workdir, ent.Name()), false, ent)
+		f, err := files.NewSerialFile(filepath.Join(workdir, ent.Name()), false, ent)
 		if err != nil {
 			return nil, err
 		}
-		farr = append(farr, f)
+		farr = append(farr, files.FileEntry(ent.Name(), f))
 	}
 
-	return files.NewSliceFile(dirname, workdir, farr), nil
+	return files.NewSliceDirectory(farr), nil
 }
