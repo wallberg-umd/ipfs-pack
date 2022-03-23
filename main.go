@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -292,6 +293,16 @@ func getPackRoot(ipfs coreiface.CoreAPI, workdir string) (node.Node, error) {
 	return prootpb, nil
 }
 
+// servePackCommandOutput provides the structure for JSON output requested using the --json parameter
+type servePackCommandOutput struct {
+	PackVersion  string   `json:""`
+	PackSize     uint64   `json:""`
+	PackRootHash string   `json:""`
+	PackRootPath string   `json:""`
+	PeerID       string   `json:""`
+	Addresses    []string `json:""`
+}
+
 var servePackCommand = cli.Command{
 	Name:  "serve",
 	Usage: "start an ipfs node to serve this pack's contents",
@@ -299,6 +310,10 @@ var servePackCommand = cli.Command{
 		cli.BoolFlag{
 			Name:  "verify",
 			Usage: "verify integrity of pack before serving",
+		},
+		cli.BoolFlag{
+			Name:  "json",
+			Usage: "output configuration as json, instead of the human readable console update",
 		},
 	},
 	Action: func(c *cli.Context) error {
@@ -325,6 +340,8 @@ var servePackCommand = cli.Command{
 			return fmt.Errorf("error opening repo: %s", err)
 		}
 
+		outputJson := c.BoolT("json")
+
 		verify := c.BoolT("verify")
 		if verify {
 			_, ds := buildDagserv(r.Datastore(), r.FileManager())
@@ -348,11 +365,13 @@ var servePackCommand = cli.Command{
 
 			if problem {
 				fmt.Println()
-				return fmt.Errorf(`Pack verify failed, refusing to serve.
+				return fmt.Errorf(`pack verify failed, refusing to serve.
   If you meant to change the files, re-run 'ipfs-pack make' to rebuild the manifest
   Otherwise, replace the bad files with the originals and run 'ipfs-pack serve' again`)
 			} else {
-				fmt.Printf("\r" + QClrLine + "Verified pack, starting server...")
+				if !outputJson {
+					fmt.Printf("\r" + QClrLine + "Verified pack, starting server...")
+				}
 			}
 		}
 
@@ -382,30 +401,60 @@ var servePackCommand = cli.Command{
 			return err
 		}
 
-		fmt.Print(QReset)
-		putMessage(1, color(Cyan, "ipfs-pack"))
-		padPrint(3, "Pack Status", color(Green, "serving globally"))
-		padPrint(4, "Uptime", "0m")
-		padPrint(5, "Version", PackVersion)
-		padPrint(6, "Pack Size", human.Bytes(totsize))
-		padPrint(7, "Connections", "0 peers")
-		padPrint(8, "PeerID", nd.Identity.Pretty())
-		padPrint(10, "Shared", "blocks      total up    rate up")
-		padPrint(11, "", "0            0           0")
-
-		padPrint(13, "Pack Root Hash", fmt.Sprintf("dweb:%s", color(Blue, "/ipfs/"+proot.Cid().String())))
-
 		addrs := nd.PeerHost.Addrs()
-		putMessage(15, "Addresses")
-		for i, a := range addrs {
-			putMessage(16+i, a.String()+"/ipfs/"+nd.Identity.Pretty())
-		}
-
 		bottom := 16 + len(addrs)
 		lg := NewLog(bottom+3, 10)
-		putMessage(bottom+1, "Activity Log")
-		putMessage(bottom+2, "------------")
-		putMessage(bottom+15, "[Press Ctrl+c to shutdown]")
+
+		if outputJson {
+			// Output JSON
+			outputAddrs := make([]string, len(addrs))
+			for i, a := range addrs {
+				outputAddrs[i] = a.String() + "/ipfs/" + nd.Identity.Pretty()
+			}
+
+			output := servePackCommandOutput{
+				PackVersion:  PackVersion,
+				PackSize:     totsize,
+				PackRootHash: proot.Cid().String(),
+				PackRootPath: "/ipfs/" + proot.Cid().String(),
+				PeerID:       nd.Identity.Pretty(),
+				Addresses:    outputAddrs,
+			}
+
+			json, err := json.Marshal(output)
+			if err != nil {
+				return fmt.Errorf("error formatting json output: %s", err)
+			}
+
+			fmt.Println(string(json))
+
+		} else {
+			// Output to the Console
+			fmt.Print(QReset)
+			putMessage(1, color(Cyan, "ipfs-pack"))
+			padPrint(3, "Pack Status", color(Green, "serving globally"))
+			padPrint(4, "Uptime", "0m")
+			padPrint(5, "Version", PackVersion)
+			padPrint(6, "Pack Size", human.Bytes(totsize))
+			padPrint(7, "Connections", "0 peers")
+			padPrint(8, "PeerID", nd.Identity.Pretty())
+			padPrint(10, "Shared", "blocks      total up    rate up")
+			padPrint(11, "", "0            0           0")
+
+			padPrint(13, "Pack Root Hash", fmt.Sprintf("dweb:%s", color(Blue, "/ipfs/"+proot.Cid().String())))
+
+			putMessage(15, "Addresses")
+			for i, a := range addrs {
+				putMessage(16+i, a.String()+"/ipfs/"+nd.Identity.Pretty())
+			}
+
+			bottom = 16 + len(addrs)
+			lg = NewLog(bottom+3, 10)
+			putMessage(bottom+1, "Activity Log")
+			putMessage(bottom+2, "------------")
+
+			putMessage(bottom+15, "[Press Ctrl+c to shutdown]")
+		}
 
 		tick := time.NewTicker(time.Second)
 		provdelay := time.After(time.Second * 5)
@@ -417,23 +466,27 @@ var servePackCommand = cli.Command{
 
 		var provinprogress bool
 		for {
-			putMessage(bottom+13, "")
+			if !outputJson {
+				putMessage(bottom+13, "")
+			}
 			select {
 			case <-nd.Context().Done():
 				return nil
 			case <-tick.C:
-				npeers := len(nd.PeerHost.Network().Peers())
-				padPrint(7, "Connections", fmt.Sprint(npeers)+" peers")
+				if !outputJson {
+					npeers := len(nd.PeerHost.Network().Peers())
+					padPrint(7, "Connections", fmt.Sprint(npeers)+" peers")
 
-				st, err := nd.Exchange.(*bitswap.Bitswap).Stat()
-				if err != nil {
-					fmt.Println("error getting block stat: ", err)
-					continue
+					st, err := nd.Exchange.(*bitswap.Bitswap).Stat()
+					if err != nil {
+						fmt.Println("error getting block stat: ", err)
+						continue
+					}
+
+					bw := nd.Reporter.GetBandwidthTotals()
+					printDataSharedLine(11, st.BlocksSent, bw.TotalOut, bw.RateOut)
+					printTime(4, start)
 				}
-
-				bw := nd.Reporter.GetBandwidthTotals()
-				printDataSharedLine(11, st.BlocksSent, bw.TotalOut, bw.RateOut)
-				printTime(4, start)
 			case <-provdelay:
 				if !provinprogress {
 					lg.Add("announcing pack content to the network")
@@ -443,23 +496,31 @@ var servePackCommand = cli.Command{
 						ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 						err := nd.Routing.Provide(ctx, proot.Cid(), true)
 						if err != nil {
-							lg.Add(fmt.Sprintf("error notifying network about our pack: %s", err))
+							if !outputJson {
+								lg.Add(fmt.Sprintf("error notifying network about our pack: %s", err))
+							}
 						}
 						close(done)
 						cancel()
 					}()
 					provinprogress = true
 				} else {
-					lg.Add("completed network announcement!")
+					if !outputJson {
+						lg.Add("completed network announcement!")
+					}
 					provdelay = time.After(time.Hour * 12)
 					provinprogress = false
 				}
 			case mes := <-addlog:
-				lg.Add(mes)
-				lg.Print()
+				if !outputJson {
+					lg.Add(mes)
+					lg.Print()
+				}
 			case <-killed:
-				fmt.Println(QReset)
-				fmt.Println("Shutting down ipfs-pack node...")
+				if !outputJson {
+					fmt.Println(QReset)
+					fmt.Println("Shutting down ipfs-pack node...")
+				}
 				nd.Close()
 				return nil
 			}
