@@ -296,7 +296,7 @@ var servePackCommand = cli.Command{
 	Name:  "serve",
 	Usage: "start an ipfs node to serve this pack's contents",
 	Flags: []cli.Flag{
-		cli.BoolTFlag{
+		cli.BoolFlag{
 			Name:  "verify",
 			Usage: "verify integrity of pack before serving",
 		},
