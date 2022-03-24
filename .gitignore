@@ -1,2 +1,4 @@
 vendor
 *.swp
+packtest/
+ipfs/
