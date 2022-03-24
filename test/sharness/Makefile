@@ -44,7 +44,7 @@ sharness:
 bin/ipfs-pack:
 	mkdir -p bin
 	rm -f bin/ipfs-pack
-	ln ../../../ipfs-pack bin/ipfs-pack
+	ln ../../ipfs-pack bin/ipfs-pack
 
 .PHONY: all clean clean-test-results $(T) aggregate deps sharness FORCE
 

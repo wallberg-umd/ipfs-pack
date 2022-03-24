@@ -13,4 +13,7 @@ build:
 test: ipfs-pack
 	cd test/sharness && make
 
+clean:
+	rm -rf ipfs-pack ipfs packtest
+
 .PHONY: test
