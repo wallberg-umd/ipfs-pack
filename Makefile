@@ -5,10 +5,12 @@ all:
 install:
 	go install
 
+ipfs-pack: build
+
 build:
 	go build
 
-test:
+test: ipfs-pack
 	cd test/sharness && make
 
 .PHONY: test

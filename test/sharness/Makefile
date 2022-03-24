@@ -41,9 +41,10 @@ sharness:
 	@echo "*** checking $@ ***"
 	lib/install-sharness.sh
 
-bin/ipfs-pack: $(call find_go_files, ../../)
+bin/ipfs-pack:
 	mkdir -p bin
-	go build -o bin/ipfs-pack $(GOFLAGS) github.com/ipfs/ipfs-pack
+	rm -f bin/ipfs-pack
+	ln ../../../ipfs-pack bin/ipfs-pack
 
 .PHONY: all clean clean-test-results $(T) aggregate deps sharness FORCE
 
