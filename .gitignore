@@ -2,3 +2,4 @@ vendor
 *.swp
 packtest/
 ipfs/
+ipfs-pack
