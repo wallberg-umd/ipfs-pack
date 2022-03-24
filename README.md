@@ -8,12 +8,12 @@
 - It carries a standard dataset metadata file to capture and present information about the dataset (data-package.json).
 - It helps verify the authenticity of data through a file carrying cryptographic signatures (PackAuth).
 
-
 ## Installing
 
 Pre-built binaries are available on the [ipfs distributions page](https://dist.ipfs.io/#ipfs-pack).
 
 ### From source
+
 If there is not a pre-built binary for your system, or you'd like to try out
 unreleased features, or for any other reason you want to build from source, its
 relatively simple.  First, make sure you have go installed and properly
@@ -22,7 +22,7 @@ should help with that.  Once thats done, simply run `make build`.
 
 ## Usage
 
-```
+``` bash
 $ ipfs-pack --help
 NAME:
    ipfs-pack - A filesystem packing tool.
@@ -46,19 +46,22 @@ GLOBAL OPTIONS:
 ```
 
 ### Make a pack
-```
+
+``` bash
 $ cd /path/to/data/dir
 $ ipfs-pack make
 wrote PackManifest
 ```
 
 ### Verify a pack
-```
+
+``` bash
 $ ipfs-pack verify
 Pack verified successfully!
 ```
 
 ## Testing
+
 Tests require the [random-files](https://github.com/jbenet/go-random-files) module
 
 ```bash
@@ -66,7 +69,9 @@ go get -u github.com/jbenet/go-random-files/random-files
 ```
 
 Run tests with
+
 ```bash
+make test
 ./test/pack-basic.sh
 ./test/pack-serve.sh
 ```
@@ -74,4 +79,3 @@ Run tests with
 ## Spec
 
 Read the `ipfs-pack` work-in-progress "spec" here: [Spec (WIP)](./spec.md).
-
